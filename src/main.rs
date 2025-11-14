@@ -1,4 +1,7 @@
-use std::io;
+///! Main entry point for mqtt-ranger. 
+///! This application connects to an MQTT broker, subscribes to all topics,
+///! and displays incoming messages in a terminal user interface (TUI).
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::sync::Mutex;
@@ -10,9 +13,8 @@ pub mod mqtt;
 use app::{AppState as App, run_app};
 use crossterm::{
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{LeaveAlternateScreen, disable_raw_mode},
 };
-use ratatui::{Terminal, backend::CrosstermBackend};
 use rumqttc::{Event, QoS};
 use tokio::sync::mpsc;
 
@@ -20,13 +22,9 @@ use crate::mqtt::MQTTEvent;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let tick_rate = Duration::from_millis(250);
-    let mut terminal = Terminal::new(backend)?;
+    let mut terminal = tui::init_terminal().unwrap();
 
+    let tick_rate = Duration::from_millis(250);
     let app = Arc::new(Mutex::new(App::new()));
 
     let mut mqtt_client = mqtt::connect_mqtt("broker-mqtt", "localhost", 1883);
@@ -34,6 +32,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, mut rx) = mpsc::channel::<MQTTEvent>(100);
 
+    // Spawn a task to handle incoming MQTT messages.
     tokio::spawn(async move {
         while let Ok(notification) = mqtt_client.event_loop.poll().await {
             if let Event::Incoming(incoming) = notification {
@@ -47,8 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Spawn a task to update the application state with incoming MQTT messages.
     let app_clone = Arc::clone(&app);
-    
     tokio::spawn(async move {
         while let Some(mqtt_event) = rx.recv().await {
             let topic_name = mqtt_event.topic;
@@ -67,6 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
     
+    // Run the TUI application.
     run_app(&mut terminal, app, tick_rate)?;
     
     let _ = disable_raw_mode();
@@ -74,3 +74,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = terminal.show_cursor();
     Ok(())
 }
+

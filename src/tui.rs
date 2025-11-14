@@ -1,11 +1,20 @@
 use crate::app::AppState as App;
+use crossterm::{execute, terminal::{EnterAlternateScreen, enable_raw_mode}};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    Terminal, layout::{Constraint, Direction, Layout}, prelude::CrosstermBackend, style::{Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, Paragraph}
 };
 
+///! Initializes the terminal in raw mode and sets up the alternate screen for the TUI application.
+pub fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {
+    enable_raw_mode()?;
+    let mut stdout = std::io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let terminal = Terminal::new(backend)?;
+    Ok(terminal)
+}
+
+///! Renders the UI components of the TUI application.
 pub fn ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
     let size = f.area();
 
@@ -62,6 +71,7 @@ pub fn ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
     f.render_widget(activity, chunks[1]);
 }
 
+///! Helper function to create a ListState with the selected index.
 fn make_list_state(selected: usize) -> ratatui::widgets::ListState {
     let mut state = ratatui::widgets::ListState::default();
     state.select(Some(selected));

@@ -1,3 +1,7 @@
+///! Application state and main event loop for the TUI application.
+///! This module defines the data structures and logic for managing
+///! the state of the MQTT topics and their associated messages.
+
 
 use ratatui::Terminal;
 use std::time::{Duration, Instant};
@@ -6,11 +10,15 @@ use crate::app::AppState as App;
 use crossterm::event::{self, Event as CEvent, KeyCode};
 use crate::tui::ui;
 
+///! Association of an MQTT topic with its messages.
+///! Each topic has a name and a list of messages received on that topic.
 pub struct TopicActivity {
     pub name: String,
     pub messages: Vec<String>,
 }
 
+///! Represents the overall state of the application,
+///! including the list of topics and the currently selected topic.
 pub struct AppState {
     pub topics: Vec<TopicActivity>,
     pub selected_index: usize,
@@ -24,12 +32,14 @@ impl AppState {
         }
     }
 
+    ///! Move the selection to the next topic in the list.
     pub fn next(&mut self) {
         if !self.topics.is_empty() {
             self.selected_index = (self.selected_index + 1) % self.topics.len();
         }
     }
 
+    ///! Move the selection to the previous topic in the list.
     pub fn previous(&mut self) {
         if !self.topics.is_empty() {
             if self.selected_index == 0 {
@@ -42,6 +52,7 @@ impl AppState {
 }
 
 
+///! Main event loop for running the TUI application.
 pub fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     app: Arc<Mutex<App>>,
@@ -51,6 +62,7 @@ pub fn run_app<B: ratatui::backend::Backend>(
     
     loop {
         {
+            // Draw the UI.
             let app_state = app.lock().unwrap();
             terminal.draw(|f| ui::<B>(f, &*app_state))?;
         }
@@ -59,6 +71,7 @@ pub fn run_app<B: ratatui::backend::Backend>(
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
+        // Handle input events.
         if crossterm::event::poll(timeout)? {
             if let CEvent::Key(key) = event::read()? {
                 match key.code {
