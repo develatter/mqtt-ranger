@@ -1,13 +1,23 @@
 use std::time::Duration;
 
 use crate::{app::AppState as App, mqtt::MQTTConfig};
-use crossterm::{event::{self, Event, KeyCode}, execute, terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode}};
+use crossterm::{
+    event::{self, Event, KeyCode},
+    execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+};
 use ratatui::{
-    Terminal, layout::{Constraint, Direction, Layout}, prelude::CrosstermBackend, style::{Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, Paragraph}
+    Terminal,
+    layout::{Constraint, Direction, Layout},
+    prelude::CrosstermBackend,
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
 ///! Initializes the terminal in raw mode and sets up the alternate screen for the TUI application.
-pub fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {
+pub fn init_terminal()
+-> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -17,17 +27,17 @@ pub fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Bo
 }
 
 ///! Restores the terminal to its original state by disabling raw mode and leaving the alternate screen.
-pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn restore_terminal(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
     terminal.show_cursor()?;
     Ok(())
 }
 
-
-
 ///! Renders the UI components of the TUI application.
-pub fn ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
+pub fn run_topic_activity_ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
     let size = f.area();
 
     let chunks = Layout::default()
@@ -56,7 +66,11 @@ pub fn ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
                 .add_modifier(Modifier::REVERSED),
         );
 
-    f.render_stateful_widget(topics_list, chunks[0], &mut make_list_state(app.selected_index));
+    f.render_stateful_widget(
+        topics_list,
+        chunks[0],
+        &mut make_list_state(app.selected_index),
+    );
 
     // --- Activity panel ---
     let activity_text = if let Some(topic) = app.topics.get(app.selected_index) {
@@ -90,7 +104,7 @@ fn make_list_state(selected: usize) -> ratatui::widgets::ListState {
     state
 }
 
-
+///! Represents the fields in the form.
 #[derive(Copy, Clone)]
 enum FocusField {
     ClientId,
@@ -98,20 +112,21 @@ enum FocusField {
     Port,
 }
 
-struct FormState {
+///! Represents the state of the configuration form.
+struct ConfigFormState {
     client_id: String,
     host: String,
-    port: String, 
+    port: String,
     focus: FocusField,
     error: Option<String>,
 }
 
-impl FormState {
+impl ConfigFormState {
     fn new() -> Self {
         Self {
-            client_id: "mqtt-tui-client".into(),
-            host: "localhost".into(),
-            port: "1883".into(),
+            client_id: "".into(),
+            host: "".into(),
+            port: "".into(),
             focus: FocusField::ClientId,
             error: None,
         }
@@ -132,150 +147,139 @@ impl FormState {
             FocusField::Port => FocusField::Host,
         };
     }
+
+    fn insert_char(&mut self, c: char) {
+        match self.focus {
+            FocusField::ClientId => self.client_id.push(c),
+            FocusField::Host => self.host.push(c),
+            FocusField::Port => self.port.push(c),
+        }
+    }
+
+    fn delete_char(&mut self) {
+        match self.focus {
+            FocusField::ClientId => {
+                self.client_id.pop();
+            }
+            FocusField::Host => {
+                self.host.pop();
+            }
+            FocusField::Port => {
+                self.port.pop();
+            }
+        }
+    }
 }
 
-pub fn run_config_form(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<MQTTConfig, Box<dyn std::error::Error>> {
-    let mut state = FormState::new();
+///! Helper function to create a centered rectangle for the form.
+fn centered_rect(width: u16, height: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
+    let x = r.x + (r.width.saturating_sub(width)) / 2;
+    let y = r.y + (r.height.saturating_sub(height)) / 2;
+    ratatui::layout::Rect::new(x, y, width, height)
+}
 
-    let res = loop {
+
+///! Runs the configuration form to collect MQTT connection details from the user.
+pub fn run_config_form(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<MQTTConfig, Box<dyn std::error::Error>> {
+    let mut state = ConfigFormState::new();
+
+    loop {
         terminal.draw(|f| {
             let size = f.area();
+            let outer_block = Block::default().borders(Borders::NONE);
+            f.render_widget(outer_block.clone(), size);
 
+            let area = centered_rect(40, 15, size);
+
+            let inner = outer_block.inner(area);
             let chunks = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints(
-                    [
-                        Constraint::Length(3),  // title
-                        Constraint::Length(3),  // client_id
-                        Constraint::Length(3),  // host
-                        Constraint::Length(3),  // port
-                        Constraint::Length(3),  // info / error
-                        Constraint::Min(0),     // filler
-                    ]
-                    .as_ref(),
-                )
-                .direction(Direction::Horizontal)
-                .split(size);
+                .horizontal_margin(6) 
+                .vertical_margin(3) 
+                .constraints([
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                    Constraint::Length(3),
+                ])
+                .split(inner);
 
-            // Title
-            let title = Paragraph::new(Span::from(Span::styled(
-                "MQTT Configuration",
-                Style::default().add_modifier(Modifier::BOLD),
-            )))
-            .block(Block::default().borders(Borders::BOTTOM));
-            f.render_widget(title, chunks[0]);
+            let block = Block::default()
+                .title("MQTT Configuration")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Thick);
 
-            // Helper to draw a field
-            let draw_field = |label: String, value: String, focused: bool| {
-                let mut text = Vec::new();
-                text.push(Line::from(label.clone()));
-                text.push(Line::from(value.clone()));
+            f.render_widget(block, inner);
 
-                let mut block = Block::default().borders(Borders::ALL);
-                let mut style = Style::default();
-
-                if focused {
-                    style = style.add_modifier(Modifier::BOLD | Modifier::REVERSED);
-                }
-
-                Paragraph::new(text).block(block).style(style)
-            };
-
-            // client_id
-            let client_widget = draw_field(
-                "Client ID:".to_string(),
-                state.client_id.clone(),
-                matches!(state.focus, FocusField::ClientId),
-            );
-
-            f.render_widget(client_widget, chunks[1]);
-
-            // host
-            let host_widget = draw_field(
-                "Host:".to_string(),
-                state.host.clone(),
-                matches!(state.focus, FocusField::Host),
-            );
-            f.render_widget(host_widget, chunks[2]);
-
-            // port
-            let port_widget = draw_field(
-                "Port:".to_string(),
-                state.port.clone(),
-                matches!(state.focus, FocusField::Port),
-            );
-            f.render_widget(port_widget, chunks[3]);
-
-            // Info / error message
-            let info_text = if let Some(err) = &state.error {
-                Span::from(Span::styled(
-                    format!("Error: {err}"),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ))
+            // ID Field
+            let id_style = if let FocusField::ClientId = state.focus {
+                Style::default().fg(Color::Black).bg(Color::White)
             } else {
-                Span::from("Tab / ↑ / ↓ to change field · Enter to accept · Esc to quit")
+                Style::default()
             };
+            let id = Paragraph::new::<&str>(state.client_id.as_ref())
+                .style(id_style)
+                .block(Block::default().title("Name").borders(Borders::ALL));
+            f.render_widget(id, chunks[0]);
 
-            let info = Paragraph::new(info_text);
-            f.render_widget(info, chunks[4]);
+            // HOST Field
+            let host_style = if let FocusField::Host = state.focus {
+                Style::default().fg(Color::Black).bg(Color::White)
+            } else {
+                Style::default()
+            };
+            let host = Paragraph::new::<&str>(state.host.as_ref())
+                .style(host_style)
+                .block(Block::default().title("Host").borders(Borders::ALL));
+            f.render_widget(host, chunks[1]);
+
+            // PORT Field
+            let port_style = if let FocusField::Port = state.focus {
+                Style::default().fg(Color::Black).bg(Color::White)
+            } else {
+                Style::default()
+            };
+            let port = Paragraph::new::<&str>(state.port.as_ref())
+                .style(port_style)
+                .block(Block::default().title("Port").borders(Borders::ALL));
+            f.render_widget(port, chunks[2]);
         })?;
-
-        // Event handling
-        if event::poll(Duration::from_millis(200))? {
-            match event::read()? {
-                Event::Key(key) => match key.code {
-                    KeyCode::Esc => {
-                        // cancel: exit with error
-                        break Err("configuration cancelled by user".into());
-                    }
-
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
                     KeyCode::Tab | KeyCode::Down => {
                         state.next_field();
                     }
-                    KeyCode::Up => {
+                    KeyCode::BackTab | KeyCode::Up => {
                         state.prev_field();
                     }
-
-                    KeyCode::Backspace => {
-                        let target = match state.focus {
-                            FocusField::ClientId => &mut state.client_id,
-                            FocusField::Host => &mut state.host,
-                            FocusField::Port => &mut state.port,
-                        };
-                        target.pop();
-                    }
-
                     KeyCode::Char(c) => {
-                        let target = match state.focus {
-                            FocusField::ClientId => &mut state.client_id,
-                            FocusField::Host => &mut state.host,
-                            FocusField::Port => &mut state.port,
-                        };
-                        target.push(c);
+                        state.insert_char(c);
                     }
-
+                    KeyCode::Backspace => {
+                        state.delete_char();
+                    }
                     KeyCode::Enter => {
-                        // Validate and return config
-                        match state.port.parse::<u16>() {
-                            Ok(port) => {
-                                let cfg = MQTTConfig {
-                                    id: state.client_id.clone(),
-                                    host: state.host.clone(),
-                                    port,
-                                };
-                                break Ok(cfg);
-                            }
-                            Err(_) => {
-                                state.error = Some("Port must be a valid number (0-65535)".into());
-                            }
+                        // Validate port
+                        if let Ok(port) = state.port.parse::<u16>() {
+                            return Ok(MQTTConfig {
+                                id: state.client_id.clone(),
+                                host: state.host.clone(),
+                                port,
+                            });
+                        } else {
+                            state.error = Some("Port must be a valid number".into());
                         }
                     }
+                    KeyCode::Esc => {
+                        return Err("User cancelled the configuration form".into());
+                    }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
-    };
-    res
+    }
 }
+
 

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use std::sync::{Arc, Mutex};
 use crate::app::AppState as App;
 use crossterm::event::{self, Event as CEvent, KeyCode};
-use crate::tui::ui;
+use crate::tui::run_topic_activity_ui;
 
 ///! Association of an MQTT topic with its messages.
 ///! Each topic has a name and a list of messages received on that topic.
@@ -64,7 +64,7 @@ pub fn run_app<B: ratatui::backend::Backend>(
         {
             // Draw the UI.
             let app_state = app.lock().unwrap();
-            terminal.draw(|f| ui::<B>(f, &*app_state))?;
+            terminal.draw(|f| run_topic_activity_ui::<B>(f, &*app_state))?;
         }
 
         let timeout = tick_rate

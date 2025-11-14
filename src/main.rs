@@ -22,6 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(cfg) => cfg,
         Err(e) => {
             tui::restore_terminal(&mut terminal)?;
+            println!("Error: {}", e);
             return Ok(());
         }
     };
