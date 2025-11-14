@@ -22,6 +22,12 @@ pub struct MQTTClient{
     pub(crate) event_loop: EventLoop,
 }
 
+#[derive(Debug, Clone)]
+pub struct MQTTConfig {
+    pub id: String,
+    pub host: String,
+    pub port: u16,
+}
 
 ///! Connects to an MQTT broker and returns an MQTTClient instance.
 pub fn connect_mqtt(id: &str, host: &str, port: u16) -> MQTTClient {
@@ -36,12 +42,12 @@ pub fn connect_mqtt(id: &str, host: &str, port: u16) -> MQTTClient {
 }
 
 ///! Runs the MQTT client, subscribes to all topics, and processes incoming messages.
-pub async fn run(app: Arc<Mutex<app::AppState>>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run(app: Arc<Mutex<app::AppState>>, config: MQTTConfig) -> Result<(), Box<dyn std::error::Error>> {
     //TODO: make broker, host, port configurable via form
     let mqtt_client = configure_mqtt_client(
-        "broker-mqtt", 
-        "localhost", 
-        1883
+        &config.id, 
+        &config.host, 
+        config.port
     ).await?;
 
     let (tx, rx) = mpsc::channel::<MQTTEvent>(100);
