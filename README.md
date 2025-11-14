@@ -1,2 +1,20 @@
 # mqtt-ranger
-A mini MQTT exploration tool made with Rust.
+A minimal MQTT exploration tool implemented in Rust for personal use.
+
+<img src="images/mqtt-ranger.png" style="center; height: 300px"/>
+
+It shows MQTT topics and messages in real time in your terminal.
+
+## Use
+
+```bash
+git clone https://github.com/develatter/mqtt-ranger
+cd mqtt-ranger
+cargo run
+```
+
+## License
+See [License](LICENSE).
+
+## Contributions
+Feel free to submit your PR 😊.
