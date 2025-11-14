@@ -1,12 +1,9 @@
-
-use ratatui::{
-    Terminal
-};
+use ratatui::Terminal;
 use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
 use crate::app::AppState as App;
 use crossterm::event::{self, Event as CEvent, KeyCode};
 use crate::tui::ui;
-
 
 pub struct TopicActivity {
     pub name: String,
@@ -43,27 +40,43 @@ impl AppState {
     }
 }
 
+
 pub fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    app: &mut App,
+    app: Arc<Mutex<App>>,
     tick_rate: Duration,
 ) -> std::io::Result<()> {
+    let mut last_tick = Instant::now();
+    
     loop {
-        terminal.draw(|f| ui::<B>(f, app))?;
+        {
+            let app_state = app.lock().unwrap();
+            terminal.draw(|f| ui::<B>(f, &*app_state))?;
+        }
 
         let timeout = tick_rate
-            .checked_sub(Instant::now().elapsed())
+            .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
 
         if crossterm::event::poll(timeout)? {
             if let CEvent::Key(key) = event::read()? {
                 match key.code {
-                    KeyCode::Char('q') => return Ok(()), 
-                    KeyCode::Down => app.next(),
-                    KeyCode::Up => app.previous(),
+                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Down => {
+                        if let Ok(mut app_state) = app.lock() {
+                            app_state.next();
+                        }
+                    }
+                    KeyCode::Up => {
+                        if let Ok(mut app_state) = app.lock() {
+                            app_state.previous();
+                        }
+                    }
                     _ => {}
                 }
             }
         }
+
+        last_tick = Instant::now();
     }
 }
