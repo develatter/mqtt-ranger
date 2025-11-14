@@ -1,7 +1,7 @@
 # mqtt-ranger
 A minimal MQTT exploration tool implemented in Rust for personal use.
 
-<img src="images/mqtt-ranger.png" style="center; height: 300px"/>
+<img src="images/mqtt-ranger.png"/>
 
 It shows MQTT topics and messages in real time in your terminal.
 
