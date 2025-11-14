@@ -55,9 +55,9 @@ impl AppState {
 ///! Main event loop for running the TUI application.
 pub fn run_app<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    app: Arc<Mutex<App>>,
-    tick_rate: Duration,
+    app: Arc<Mutex<App>>
 ) -> std::io::Result<()> {
+    let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
     
     loop {

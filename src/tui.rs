@@ -1,5 +1,5 @@
 use crate::app::AppState as App;
-use crossterm::{execute, terminal::{EnterAlternateScreen, enable_raw_mode}};
+use crossterm::{execute, terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode}};
 use ratatui::{
     Terminal, layout::{Constraint, Direction, Layout}, prelude::CrosstermBackend, style::{Modifier, Style}, text::{Line, Span}, widgets::{Block, Borders, List, ListItem, Paragraph}
 };
@@ -12,6 +12,14 @@ pub fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Bo
     let backend = CrosstermBackend::new(stdout);
     let terminal = Terminal::new(backend)?;
     Ok(terminal)
+}
+
+///! Restores the terminal to its original state by disabling raw mode and leaving the alternate screen.
+pub fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<(), Box<dyn std::error::Error>> {
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+    Ok(())
 }
 
 ///! Renders the UI components of the TUI application.
