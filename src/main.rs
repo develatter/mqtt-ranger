@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(cfg) => cfg,
         Err(e) => {
             let _ = tui::restore_terminal(&mut terminal);
-            eprintln!("Error en configuración: {}", e);
+            eprintln!("Configuration error: {}", e);
             return Ok(());
         }
     };
