@@ -1,17 +1,25 @@
-use std::time::Duration;
+///! TUI module for mqtt-ranger: Handles terminal initialization, splash screen,
+///! configuration form, and main event loop for displaying MQTT topic activity.
+///! This module uses the ratatui and crossterm crates to create a user-friendly
+///! terminal interface.
 
-use crate::{app::AppState as App, mqtt::MQTTConfig};
+use std::{sync::{Arc, Mutex}, time::{Duration, Instant}};
+
+use crate::{
+    app::{AppState as App, ConfigFormState, FocusField}, 
+    mqtt::MQTTConfig
+};
 use crossterm::{
-    event::{self, Event, KeyCode},
+    event::{self, Event, KeyCode,},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
-    layout::{Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout},
     prelude::CrosstermBackend,
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
 
@@ -36,8 +44,259 @@ pub fn restore_terminal(
     Ok(())
 }
 
+///! Helper function to create a ListState with the selected index.
+fn make_list_state(selected: usize) -> ratatui::widgets::ListState {
+    let mut state = ratatui::widgets::ListState::default();
+    state.select(Some(selected));
+    state
+}
+
+
+///! Helper function to create a centered rectangle for the form.
+fn centered_rect(width: u16, height: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
+    let clamped_width = width.min(r.width);
+    let clamped_height = height.min(r.height);
+
+    let x = r.x + (r.width.saturating_sub(clamped_width)) / 2;
+    let y = r.y + (r.height.saturating_sub(clamped_height)) / 2;
+
+    ratatui::layout::Rect::new(x, y, clamped_width, clamped_height)
+}
+
+///! Runs the splash screen until a key is pressed.
+pub fn run_splash_screen<B: ratatui::backend::Backend>(
+    terminal: &mut Terminal<B>,
+) -> std::io::Result<()> {
+    loop {
+        terminal.draw(|f| {
+            render_splash_screen::<B>(f);
+        })?;
+
+        if crossterm::event::poll(Duration::from_millis(100))? {
+            if let crossterm::event::Event::Key(_) = crossterm::event::read()? {
+                break;
+            }
+        }
+    }
+    Ok(())
+}
+
+///! Renders the splash screen with ASCII art.
+fn render_splash_screen<B: ratatui::backend::Backend>(f: &mut ratatui::Frame) {
+    let size = f.area();
+
+    let ascii_art = r#"
+▄▄   ▄▄  ▄▄▄ ▄▄▄▄▄▄ ▄▄▄▄▄▄    ▄▄▄▄   ▄▄▄  ▄▄  ▄▄  ▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄  
+██▀▄▀██ ██▀██  ██     ██  ▄▄▄ ██▄█▄ ██▀██ ███▄██ ██ ▄▄ ██▄▄  ██▄█▄ 
+██   ██ ▀███▀  ██     ██      ██ ██ ██▀██ ██ ▀██ ▀███▀ ██▄▄▄ ██ ██ 
+           ▀▀                                                    
+"#;
+
+    let show_art = size.width >= 80 && size.height >= 20;
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(if show_art {
+            vec![
+                Constraint::Percentage(40),
+                Constraint::Min(7),    // art
+                Constraint::Length(3), // message
+                Constraint::Percentage(40),
+            ]
+        } else {
+            vec![
+                Constraint::Percentage(45),
+                Constraint::Length(3),
+                Constraint::Percentage(45),
+            ]
+        })
+        .split(size);
+
+    if show_art {
+        let art_paragraph = Paragraph::new(Text::from(ascii_art))
+            .style(Style::default().fg(Color::White))
+            .alignment(Alignment::Center)
+            .block(Block::default());
+        f.render_widget(art_paragraph, layout[1]);
+        f.render_widget(
+            Paragraph::new("< Press any key to continue >")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center),
+            layout[2],
+        );
+    } else {
+        f.render_widget(
+            Paragraph::new("< Press any key to continue >")
+                .style(Style::default().fg(Color::White))
+                .alignment(Alignment::Center),
+            layout[1],
+        );
+    }
+}
+
+
+///! Runs the configuration form to collect MQTT connection details from the user.
+pub fn run_config_form_screen(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<MQTTConfig, Box<dyn std::error::Error>> {
+    let mut state = ConfigFormState::new();
+
+    loop {
+        terminal.draw(|f| {
+            let size = f.area();
+
+            let total_area = centered_rect(40, 17, size);
+
+            let layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([
+                    Constraint::Length(15), 
+                    Constraint::Length(2),  // error message
+                ])
+                .split(total_area);
+
+            let form_area = layout[0];
+            let error_area = layout[1];
+
+            //--- FORM BLOCK ---
+            let block = Block::default()
+                .title("MQTT Configuration")
+                .title_alignment(Alignment::Center)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Thick);
+
+            f.render_widget(block.clone(), form_area);
+
+            let inner = block.inner(form_area);
+
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                .horizontal_margin(6)
+                .vertical_margin(3)
+                .constraints([
+                    Constraint::Length(3), // Host
+                    Constraint::Length(3), // Port
+                ])
+                .split(inner);
+
+            // --- HOST FIELD ---
+            let host_style = if let FocusField::Host = state.focus {
+                Style::default().fg(Color::Black).bg(Color::White)
+            } else {
+                Style::default()
+            };
+            let host = Paragraph::new::<&str>(state.host.as_ref())
+                .style(host_style)
+                .block(Block::default().title("Host").borders(Borders::ALL));
+            f.render_widget(host, chunks[0]);
+
+            // --- PORT FIELD ---
+            let port_style = if let FocusField::Port = state.focus {
+                Style::default().fg(Color::Black).bg(Color::White)
+            } else {
+                Style::default()
+            };
+            let port = Paragraph::new::<&str>(state.port.as_ref())
+                .style(port_style)
+                .block(Block::default().title("Port").borders(Borders::ALL));
+            f.render_widget(port, chunks[1]);
+
+            // --- ERROR MESSAGE ---
+            if let Some(err_msg) = &state.error {
+                let error = Paragraph::new(err_msg.clone())
+                    .style(Style::default().fg(Color::Red))
+                    .alignment(Alignment::Center);
+                f.render_widget(error, error_area);
+            }
+        })?;
+
+        // INPUT HANDLING
+        if event::poll(Duration::from_millis(100))? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Tab | KeyCode::Down => {
+                        state.next_field();
+                        state.error = None;
+                    }
+                    KeyCode::BackTab | KeyCode::Up => {
+                        state.prev_field();
+                        state.error = None;
+                    }
+                    KeyCode::Char(c) => {
+                        state.insert_char(c);
+                        state.error = None;
+                    }
+                    KeyCode::Backspace => {
+                        state.delete_char();
+                        state.error = None;
+                    }
+                    KeyCode::Enter => {
+                        if let Ok(port) = state.port.parse::<u16>() {
+                            return Ok(MQTTConfig {
+                                host: state.host.clone(),
+                                port,
+                            });
+                        } else {
+                            state.error = Some("Port must be a valid number".into());
+                        }
+                    }
+                    KeyCode::Esc => {
+                        return Err("User cancelled the configuration form".into());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+
+///! Main event loop for running the TUI application.
+pub fn run_topic_activity_screen<B: ratatui::backend::Backend>(
+    terminal: &mut Terminal<B>,
+    app: Arc<Mutex<App>>
+) -> std::io::Result<()> {
+    let tick_rate = Duration::from_millis(250);
+    let mut last_tick = Instant::now();
+    
+    loop {
+        {
+            // Draw the UI.
+            let app_state = app.lock().unwrap();
+            terminal.draw(|f| render_topic_activity_ui::<B>(f, &*app_state))?;
+        }
+
+        let timeout = tick_rate
+            .checked_sub(last_tick.elapsed())
+            .unwrap_or_else(|| Duration::from_secs(0));
+
+        // Handle input events.
+        if crossterm::event::poll(timeout)? {
+            if let Event::Key(key) = event::read()? {
+                match key.code {
+                    KeyCode::Char('q') => return Ok(()),
+                    KeyCode::Down => {
+                        if let Ok(mut app_state) = app.lock() {
+                            app_state.next();
+                        }
+                    }
+                    KeyCode::Up => {
+                        if let Ok(mut app_state) = app.lock() {
+                            app_state.previous();
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        last_tick = Instant::now();
+    }
+}
+
+
 ///! Renders the UI components of the TUI application.
-pub fn run_topic_activity_ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
+pub fn render_topic_activity_ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
     let size = f.area();
 
     let chunks = Layout::default()
@@ -96,190 +355,3 @@ pub fn run_topic_activity_ui<B: ratatui::backend::Backend>(f: &mut ratatui::Fram
         .block(Block::default().title("Activity").borders(Borders::ALL));
     f.render_widget(activity, chunks[1]);
 }
-
-///! Helper function to create a ListState with the selected index.
-fn make_list_state(selected: usize) -> ratatui::widgets::ListState {
-    let mut state = ratatui::widgets::ListState::default();
-    state.select(Some(selected));
-    state
-}
-
-///! Represents the fields in the form.
-#[derive(Copy, Clone)]
-enum FocusField {
-    ClientId,
-    Host,
-    Port,
-}
-
-///! Represents the state of the configuration form.
-struct ConfigFormState {
-    client_id: String,
-    host: String,
-    port: String,
-    focus: FocusField,
-    error: Option<String>,
-}
-
-impl ConfigFormState {
-    fn new() -> Self {
-        Self {
-            client_id: "".into(),
-            host: "".into(),
-            port: "".into(),
-            focus: FocusField::ClientId,
-            error: None,
-        }
-    }
-
-    fn next_field(&mut self) {
-        self.focus = match self.focus {
-            FocusField::ClientId => FocusField::Host,
-            FocusField::Host => FocusField::Port,
-            FocusField::Port => FocusField::ClientId,
-        };
-    }
-
-    fn prev_field(&mut self) {
-        self.focus = match self.focus {
-            FocusField::ClientId => FocusField::Port,
-            FocusField::Host => FocusField::ClientId,
-            FocusField::Port => FocusField::Host,
-        };
-    }
-
-    fn insert_char(&mut self, c: char) {
-        match self.focus {
-            FocusField::ClientId => self.client_id.push(c),
-            FocusField::Host => self.host.push(c),
-            FocusField::Port => self.port.push(c),
-        }
-    }
-
-    fn delete_char(&mut self) {
-        match self.focus {
-            FocusField::ClientId => {
-                self.client_id.pop();
-            }
-            FocusField::Host => {
-                self.host.pop();
-            }
-            FocusField::Port => {
-                self.port.pop();
-            }
-        }
-    }
-}
-
-///! Helper function to create a centered rectangle for the form.
-fn centered_rect(width: u16, height: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
-    let x = r.x + (r.width.saturating_sub(width)) / 2;
-    let y = r.y + (r.height.saturating_sub(height)) / 2;
-    ratatui::layout::Rect::new(x, y, width, height)
-}
-
-
-///! Runs the configuration form to collect MQTT connection details from the user.
-pub fn run_config_form(
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-) -> Result<MQTTConfig, Box<dyn std::error::Error>> {
-    let mut state = ConfigFormState::new();
-
-    loop {
-        terminal.draw(|f| {
-            let size = f.area();
-            let outer_block = Block::default().borders(Borders::NONE);
-            f.render_widget(outer_block.clone(), size);
-
-            let area = centered_rect(40, 15, size);
-
-            let inner = outer_block.inner(area);
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .horizontal_margin(6) 
-                .vertical_margin(3) 
-                .constraints([
-                    Constraint::Length(3),
-                    Constraint::Length(3),
-                    Constraint::Length(3),
-                ])
-                .split(inner);
-
-            let block = Block::default()
-                .title("MQTT Configuration")
-                .borders(Borders::ALL)
-                .border_type(BorderType::Thick);
-
-            f.render_widget(block, inner);
-
-            // ID Field
-            let id_style = if let FocusField::ClientId = state.focus {
-                Style::default().fg(Color::Black).bg(Color::White)
-            } else {
-                Style::default()
-            };
-            let id = Paragraph::new::<&str>(state.client_id.as_ref())
-                .style(id_style)
-                .block(Block::default().title("Name").borders(Borders::ALL));
-            f.render_widget(id, chunks[0]);
-
-            // HOST Field
-            let host_style = if let FocusField::Host = state.focus {
-                Style::default().fg(Color::Black).bg(Color::White)
-            } else {
-                Style::default()
-            };
-            let host = Paragraph::new::<&str>(state.host.as_ref())
-                .style(host_style)
-                .block(Block::default().title("Host").borders(Borders::ALL));
-            f.render_widget(host, chunks[1]);
-
-            // PORT Field
-            let port_style = if let FocusField::Port = state.focus {
-                Style::default().fg(Color::Black).bg(Color::White)
-            } else {
-                Style::default()
-            };
-            let port = Paragraph::new::<&str>(state.port.as_ref())
-                .style(port_style)
-                .block(Block::default().title("Port").borders(Borders::ALL));
-            f.render_widget(port, chunks[2]);
-        })?;
-        if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Tab | KeyCode::Down => {
-                        state.next_field();
-                    }
-                    KeyCode::BackTab | KeyCode::Up => {
-                        state.prev_field();
-                    }
-                    KeyCode::Char(c) => {
-                        state.insert_char(c);
-                    }
-                    KeyCode::Backspace => {
-                        state.delete_char();
-                    }
-                    KeyCode::Enter => {
-                        // Validate port
-                        if let Ok(port) = state.port.parse::<u16>() {
-                            return Ok(MQTTConfig {
-                                id: state.client_id.clone(),
-                                host: state.host.clone(),
-                                port,
-                            });
-                        } else {
-                            state.error = Some("Port must be a valid number".into());
-                        }
-                    }
-                    KeyCode::Esc => {
-                        return Err("User cancelled the configuration form".into());
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-}
-
-

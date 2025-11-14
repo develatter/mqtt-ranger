@@ -3,13 +3,6 @@
 ///! the state of the MQTT topics and their associated messages.
 
 
-use ratatui::Terminal;
-use std::time::{Duration, Instant};
-use std::sync::{Arc, Mutex};
-use crate::app::AppState as App;
-use crossterm::event::{self, Event as CEvent, KeyCode};
-use crate::tui::run_topic_activity_ui;
-
 ///! Association of an MQTT topic with its messages.
 ///! Each topic has a name and a list of messages received on that topic.
 pub struct TopicActivity {
@@ -52,45 +45,65 @@ impl AppState {
 }
 
 
-///! Main event loop for running the TUI application.
-pub fn run_app<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
-    app: Arc<Mutex<App>>
-) -> std::io::Result<()> {
-    let tick_rate = Duration::from_millis(250);
-    let mut last_tick = Instant::now();
-    
-    loop {
-        {
-            // Draw the UI.
-            let app_state = app.lock().unwrap();
-            terminal.draw(|f| run_topic_activity_ui::<B>(f, &*app_state))?;
+///! Represents the fields in the configuration form.
+#[derive(Copy, Clone)]
+pub enum FocusField {
+    Host,
+    Port,
+}
+
+///! Represents the state of the configuration form.
+pub struct ConfigFormState {
+    pub host: String,
+    pub port: String,
+    pub focus: FocusField,
+    pub error: Option<String>,
+}
+
+impl ConfigFormState {
+    pub fn new() -> Self {
+        Self {
+            host: "".into(),
+            port: "".into(),
+            focus: FocusField::Host,
+            error: None,
         }
+    }
 
-        let timeout = tick_rate
-            .checked_sub(last_tick.elapsed())
-            .unwrap_or_else(|| Duration::from_secs(0));
+    ///! Move focus to the next field in the form.
+    pub fn next_field(&mut self) {
+        self.focus = match self.focus {
+            FocusField::Host => FocusField::Port,
+            FocusField::Port => FocusField::Host,
+        };
+    }
 
-        // Handle input events.
-        if crossterm::event::poll(timeout)? {
-            if let CEvent::Key(key) = event::read()? {
-                match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Down => {
-                        if let Ok(mut app_state) = app.lock() {
-                            app_state.next();
-                        }
-                    }
-                    KeyCode::Up => {
-                        if let Ok(mut app_state) = app.lock() {
-                            app_state.previous();
-                        }
-                    }
-                    _ => {}
-                }
+    ///! Move focus to the previous field in the form.
+    pub fn prev_field(&mut self) {
+        self.focus = match self.focus {
+            FocusField::Host => FocusField::Port,
+            FocusField::Port => FocusField::Host,
+        };
+    }
+
+    ///! Insert a character into the currently focused field.
+    pub fn insert_char(&mut self, c: char) {
+        match self.focus {
+            FocusField::Host => self.host.push(c),
+            FocusField::Port => self.port.push(c),
+        }
+    }
+
+    ///! Delete the last character from the currently focused field.
+    pub fn delete_char(&mut self) {
+        match self.focus {
+            FocusField::Host => {
+                self.host.pop();
+            }
+            FocusField::Port => {
+                self.port.pop();
             }
         }
-
-        last_tick = Instant::now();
     }
 }
+
