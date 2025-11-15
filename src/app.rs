@@ -18,12 +18,12 @@ pub struct MessageActivity {
 
 /// Represents the overall state of the application,
 /// including the list of topics and the currently selected topic.
-pub struct AppState {
+pub struct TopicActivityMenuState {
     pub topics: Vec<TopicActivity>,
     pub selected_index: usize,
 }
 
-impl AppState {
+impl TopicActivityMenuState {
     pub fn new() -> Self {
         Self {
             topics: Vec::new(),
@@ -113,3 +113,59 @@ impl ConfigFormState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_app_state_next() {
+        let mut menu_state = TopicActivityMenuState::new();
+
+        menu_state.topics.push(
+            TopicActivity {
+                name: "topic1".into(),
+                messages: vec![],
+            }
+        );
+
+        menu_state.topics.push(
+            TopicActivity {
+                name: "topic2".into(),
+                messages: vec![],
+            }
+        );
+
+        assert_eq!(menu_state.selected_index, 0);
+        menu_state.next();
+        assert_eq!(menu_state.selected_index, 1);
+        menu_state.next();
+        assert_eq!(menu_state.selected_index, 0);
+    }
+
+
+    #[test]
+    fn test_app_state_previous() {
+        let mut menu_state = TopicActivityMenuState::new();
+
+        menu_state.topics.push(
+            TopicActivity {
+                name: "topic1".into(),
+                messages: vec![],
+            }
+        );
+
+        menu_state.topics.push(
+            TopicActivity {
+                name: "topic2".into(),
+                messages: vec![],
+            }
+        );
+
+        assert_eq!(menu_state.selected_index, 0);
+        menu_state.previous();
+        assert_eq!(menu_state.selected_index, 1);
+        menu_state.previous();
+        assert_eq!(menu_state.selected_index, 0);
+    }
+
+}

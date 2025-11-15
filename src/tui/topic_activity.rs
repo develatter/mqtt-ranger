@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    app::AppState,
+    app::TopicActivityMenuState,
     tui::{Screen, make_list_state},
 };
 
@@ -21,7 +21,7 @@ use ratatui::{
 /// Screen for displaying topic activity.
 pub struct TopicActivityScreen<'a> {
     terminal: &'a mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    app_state: Arc<Mutex<AppState>>,
+    menu_state: Arc<Mutex<TopicActivityMenuState>>,
     tick_rate: Duration,
     last_tick: Instant,
 }
@@ -29,18 +29,18 @@ pub struct TopicActivityScreen<'a> {
 impl<'a> TopicActivityScreen<'a> {
     pub fn new(
         terminal: &'a mut Terminal<CrosstermBackend<std::io::Stdout>>,
-        app_state: Arc<Mutex<AppState>>,
+        menu_state: Arc<Mutex<TopicActivityMenuState>>,
     ) -> Self {
         Self {
             terminal,
-            app_state,
+            menu_state,
             tick_rate: Duration::from_millis(250),
             last_tick: Instant::now(),
         }
     }
 
     /// Renders the topic activity screen UI.
-    fn render_topic_activity_screen_ui(f: &mut ratatui::Frame, app: &AppState) {
+    fn render_topic_activity_screen_ui(f: &mut ratatui::Frame, app: &TopicActivityMenuState) {
         let size = f.area();
 
         let chunks = Layout::default()
@@ -115,8 +115,8 @@ impl Screen for TopicActivityScreen<'_> {
     fn run(&mut self) -> std::io::Result<()> {
         loop {
             {
-                let app_guard = self
-                    .app_state
+                let menu_guard = self
+                    .menu_state
                     .lock()
                     .map_err(|_| {
                         std::io::Error::new(
@@ -125,7 +125,7 @@ impl Screen for TopicActivityScreen<'_> {
                     })?;
 
                 self.terminal.draw(|f| {
-                    TopicActivityScreen::render_topic_activity_screen_ui(f, &*app_guard);
+                    TopicActivityScreen::render_topic_activity_screen_ui(f, &*menu_guard);
                 })?;
             }
 
@@ -157,13 +157,13 @@ impl Screen for TopicActivityScreen<'_> {
                 KeyCode::Char('q') => return Ok(true),
 
                 KeyCode::Down => {
-                    if let Ok(mut app) = self.app_state.lock() {
-                        app.next();
+                    if let Ok(mut topic_activity_menu_state) = self.menu_state.lock() {
+                        topic_activity_menu_state.next();
                     }
                 }
                 KeyCode::Up => {
-                    if let Ok(mut app) = self.app_state.lock() {
-                        app.previous();
+                    if let Ok(mut topic_activity_menu_state) = self.menu_state.lock() {
+                        topic_activity_menu_state.previous();
                     }
                 }
                 _ => {}
