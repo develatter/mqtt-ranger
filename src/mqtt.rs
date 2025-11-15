@@ -108,11 +108,17 @@ fn update_app_state(app: Arc<Mutex<app::AppState>>, mut rx: mpsc::Receiver<MQTTE
             let timestamp = mqtt_event.timestamp.format(&date_format).unwrap();
 
             if let Some(t) = topic {
-                t.messages.push(format!("{}: {}", timestamp, payload));
+                t.messages.push(app::MessageActivity {
+                    payload: payload.clone(),
+                    timestamp: timestamp.clone(),
+                });
             } else {
                 app_lock.topics.push(app::TopicActivity {
                     name: topic_name,
-                    messages: vec![format!("{}: {}", timestamp, payload)],
+                    messages: vec![app::MessageActivity {
+                        payload: payload.clone(),
+                        timestamp: timestamp.clone(),
+                    }],
                 });
             }
         }

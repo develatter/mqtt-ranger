@@ -10,6 +10,7 @@ pub mod tui;
 
 use app::{AppState as App};
 use tui::run_topic_activity_screen;
+use crate::tui::Screen;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -17,8 +18,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut terminal = tui::init_terminal()?;
 
-    let _ = tui::run_splash_screen(&mut terminal);
-
+    let mut splash_screen = tui::SplashScreen::new(&mut terminal);
+    splash_screen.run()?;
+    
     let config = match tui::run_config_form_screen(&mut terminal) {
         Ok(cfg) => cfg,
         Err(e) => {

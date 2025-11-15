@@ -7,7 +7,13 @@
 ///! Each topic has a name and a list of messages received on that topic.
 pub struct TopicActivity {
     pub name: String,
-    pub messages: Vec<String>,
+    pub messages: Vec<MessageActivity>,
+}
+
+///! Represents a single MQTT message activity,
+pub struct MessageActivity {
+    pub payload: String,
+    pub timestamp: String,
 }
 
 ///! Represents the overall state of the application,

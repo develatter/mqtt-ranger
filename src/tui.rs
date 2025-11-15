@@ -2,17 +2,21 @@
 ///! configuration form, and main event loop for displaying MQTT topic activity.
 ///! This module uses the ratatui and crossterm crates to create a user-friendly
 ///! terminal interface.
-
-use std::{sync::{Arc, Mutex}, time::{Duration, Instant}};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 use crate::{
-    app::{AppState as App, ConfigFormState, FocusField}, 
-    mqtt::MQTTConfig
+    app::{AppState as App, ConfigFormState, FocusField},
+    mqtt::MQTTConfig,
 };
 use crossterm::{
-    event::{self, Event, KeyCode,},
+    event::{self, Event, KeyCode},
     execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{
+        EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
+    },
 };
 use ratatui::{
     Terminal,
@@ -51,7 +55,6 @@ fn make_list_state(selected: usize) -> ratatui::widgets::ListState {
     state
 }
 
-
 ///! Helper function to create a centered rectangle for the form.
 fn centered_rect(width: u16, height: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let clamped_width = width.min(r.width);
@@ -63,75 +66,106 @@ fn centered_rect(width: u16, height: u16, r: ratatui::layout::Rect) -> ratatui::
     ratatui::layout::Rect::new(x, y, clamped_width, clamped_height)
 }
 
-///! Runs the splash screen until a key is pressed.
-pub fn run_splash_screen<B: ratatui::backend::Backend>(
-    terminal: &mut Terminal<B>,
-) -> std::io::Result<()> {
-    loop {
-        terminal.draw(|f| {
-            render_splash_screen::<B>(f);
-        })?;
+///! Trait representing a screen in the TUI application.
+pub trait Screen {
+    fn run(&mut self) -> std::io::Result<()>;
 
-        if crossterm::event::poll(Duration::from_millis(100))? {
-            if let crossterm::event::Event::Key(_) = crossterm::event::read()? {
-                break;
-            }
-        }
-    }
-    Ok(())
+    fn handle_input(&mut self) -> std::io::Result<bool>;
 }
 
-///! Renders the splash screen with ASCII art.
-fn render_splash_screen<B: ratatui::backend::Backend>(f: &mut ratatui::Frame) {
-    let size = f.area();
+pub struct SplashScreen<'a> {
+    terminal: &'a mut Terminal<CrosstermBackend<std::io::Stdout>>,
+}
 
-    let ascii_art = r#"
+impl<'a> SplashScreen<'a> {
+    pub fn new(terminal: &'a mut Terminal<CrosstermBackend<std::io::Stdout>>) -> Self {
+        Self { terminal }
+    }
+
+    ///! Renders the splash screen with ASCII art.
+    fn render_splash_screen_ui(f: &mut ratatui::Frame) {
+        let size = f.area();
+
+        let ascii_art = r#"
 ▄▄   ▄▄  ▄▄▄ ▄▄▄▄▄▄ ▄▄▄▄▄▄    ▄▄▄▄   ▄▄▄  ▄▄  ▄▄  ▄▄▄▄ ▄▄▄▄▄ ▄▄▄▄  
 ██▀▄▀██ ██▀██  ██     ██  ▄▄▄ ██▄█▄ ██▀██ ███▄██ ██ ▄▄ ██▄▄  ██▄█▄ 
 ██   ██ ▀███▀  ██     ██      ██ ██ ██▀██ ██ ▀██ ▀███▀ ██▄▄▄ ██ ██ 
            ▀▀                                                    
 "#;
 
-    let show_art = size.width >= 80 && size.height >= 20;
+        let show_art = size.width >= 80 && size.height >= 20;
 
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(if show_art {
-            vec![
-                Constraint::Percentage(40),
-                Constraint::Min(7),    // art
-                Constraint::Length(3), // message
-                Constraint::Percentage(40),
-            ]
-        } else {
-            vec![
-                Constraint::Percentage(45),
-                Constraint::Length(3),
-                Constraint::Percentage(45),
-            ]
-        })
-        .split(size);
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(if show_art {
+                vec![
+                    Constraint::Percentage(40),
+                    Constraint::Min(7),    // art
+                    Constraint::Length(3), // message
+                    Constraint::Percentage(40),
+                ]
+            } else {
+                vec![
+                    Constraint::Percentage(45),
+                    Constraint::Length(3),
+                    Constraint::Percentage(45),
+                ]
+            })
+            .split(size);
 
-    if show_art {
-        let art_paragraph = Paragraph::new(Text::from(ascii_art))
-            .style(Style::default().fg(Color::White))
-            .alignment(Alignment::Center)
-            .block(Block::default());
-        f.render_widget(art_paragraph, layout[1]);
-        f.render_widget(
-            Paragraph::new("< Press any key to continue >")
-                .style(Style::default().fg(Color::DarkGray))
-                .alignment(Alignment::Center),
-            layout[2],
-        );
-    } else {
-        f.render_widget(
-            Paragraph::new("< Press any key to continue >")
+        if show_art {
+            let art_paragraph = Paragraph::new(Text::from(ascii_art))
                 .style(Style::default().fg(Color::White))
-                .alignment(Alignment::Center),
-            layout[1],
-        );
+                .alignment(Alignment::Center)
+                .block(Block::default());
+            f.render_widget(art_paragraph, layout[1]);
+            f.render_widget(
+                Paragraph::new("< Press any key to continue >")
+                    .style(Style::default().fg(Color::DarkGray))
+                    .alignment(Alignment::Center),
+                layout[2],
+            );
+        } else {
+            f.render_widget(
+                Paragraph::new("< Press any key to continue >")
+                    .style(Style::default().fg(Color::White))
+                    .alignment(Alignment::Center),
+                layout[1],
+            );
+        }
     }
+}
+
+impl Screen for SplashScreen<'_> {
+    fn run(&mut self) -> std::io::Result<()> {
+        loop {
+            self.terminal.draw(|f| {
+                Self::render_splash_screen_ui(f);
+            })?;
+
+            if self.handle_input()? {
+                return Ok(());
+            }
+        }
+    }
+
+    fn handle_input(&mut self) -> std::io::Result<bool> {
+        if crossterm::event::poll(Duration::from_millis(100))? {
+            if let crossterm::event::Event::Key(_) = crossterm::event::read()? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+pub struct ConfigFormScreen {
+    terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
+    state: ConfigFormState,
+}
+pub struct TopicActivityScreen {
+    terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
+    state: Arc<Mutex<App>>,
 }
 
 
@@ -143,71 +177,7 @@ pub fn run_config_form_screen(
 
     loop {
         terminal.draw(|f| {
-            let size = f.area();
-
-            let total_area = centered_rect(40, 17, size);
-
-            let layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Length(15), 
-                    Constraint::Length(2),  // error message
-                ])
-                .split(total_area);
-
-            let form_area = layout[0];
-            let error_area = layout[1];
-
-            //--- FORM BLOCK ---
-            let block = Block::default()
-                .title("MQTT Configuration")
-                .title_alignment(Alignment::Center)
-                .borders(Borders::ALL)
-                .border_type(BorderType::Thick);
-
-            f.render_widget(block.clone(), form_area);
-
-            let inner = block.inner(form_area);
-
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .horizontal_margin(6)
-                .vertical_margin(3)
-                .constraints([
-                    Constraint::Length(3), // Host
-                    Constraint::Length(3), // Port
-                ])
-                .split(inner);
-
-            // --- HOST FIELD ---
-            let host_style = if let FocusField::Host = state.focus {
-                Style::default().fg(Color::Black).bg(Color::White)
-            } else {
-                Style::default()
-            };
-            let host = Paragraph::new::<&str>(state.host.as_ref())
-                .style(host_style)
-                .block(Block::default().title("Host").borders(Borders::ALL));
-            f.render_widget(host, chunks[0]);
-
-            // --- PORT FIELD ---
-            let port_style = if let FocusField::Port = state.focus {
-                Style::default().fg(Color::Black).bg(Color::White)
-            } else {
-                Style::default()
-            };
-            let port = Paragraph::new::<&str>(state.port.as_ref())
-                .style(port_style)
-                .block(Block::default().title("Port").borders(Borders::ALL));
-            f.render_widget(port, chunks[1]);
-
-            // --- ERROR MESSAGE ---
-            if let Some(err_msg) = &state.error {
-                let error = Paragraph::new(err_msg.clone())
-                    .style(Style::default().fg(Color::Red))
-                    .alignment(Alignment::Center);
-                f.render_widget(error, error_area);
-            }
+            render_config_creen_ui::<CrosstermBackend<std::io::Stdout>>(f, &state);
         })?;
 
         // INPUT HANDLING
@@ -250,15 +220,85 @@ pub fn run_config_form_screen(
     }
 }
 
+pub fn render_config_creen_ui<B: ratatui::backend::Backend>(
+    f: &mut ratatui::Frame,
+    state: &ConfigFormState,
+) {
+    let size = f.area();
+
+    let total_area = centered_rect(40, 17, size);
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(15),
+            Constraint::Length(2), // error message
+        ])
+        .split(total_area);
+
+    let form_area = layout[0];
+    let error_area = layout[1];
+
+    //--- FORM BLOCK ---
+    let block = Block::default()
+        .title("MQTT Configuration")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick);
+
+    f.render_widget(block.clone(), form_area);
+
+    let inner = block.inner(form_area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .horizontal_margin(6)
+        .vertical_margin(3)
+        .constraints([
+            Constraint::Length(3), // Host
+            Constraint::Length(3), // Port
+        ])
+        .split(inner);
+
+    // --- HOST FIELD ---
+    let host_style = if let FocusField::Host = state.focus {
+        Style::default().fg(Color::Black).bg(Color::White)
+    } else {
+        Style::default()
+    };
+    let host = Paragraph::new::<&str>(state.host.as_ref())
+        .style(host_style)
+        .block(Block::default().title("Host").borders(Borders::ALL));
+    f.render_widget(host, chunks[0]);
+
+    // --- PORT FIELD ---
+    let port_style = if let FocusField::Port = state.focus {
+        Style::default().fg(Color::Black).bg(Color::White)
+    } else {
+        Style::default()
+    };
+    let port = Paragraph::new::<&str>(state.port.as_ref())
+        .style(port_style)
+        .block(Block::default().title("Port").borders(Borders::ALL));
+    f.render_widget(port, chunks[1]);
+
+    // --- ERROR MESSAGE ---
+    if let Some(err_msg) = &state.error {
+        let error = Paragraph::new(err_msg.clone())
+            .style(Style::default().fg(Color::Red))
+            .alignment(Alignment::Center);
+        f.render_widget(error, error_area);
+    }
+}
 
 ///! Main event loop for running the TUI application.
 pub fn run_topic_activity_screen<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
-    app: Arc<Mutex<App>>
+    app: Arc<Mutex<App>>,
 ) -> std::io::Result<()> {
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
-    
+
     loop {
         {
             // Draw the UI.
@@ -293,7 +333,6 @@ pub fn run_topic_activity_screen<B: ratatui::backend::Backend>(
         last_tick = Instant::now();
     }
 }
-
 
 ///! Renders the UI components of the TUI application.
 pub fn render_topic_activity_ui<B: ratatui::backend::Backend>(f: &mut ratatui::Frame, app: &App) {
@@ -334,16 +373,25 @@ pub fn render_topic_activity_ui<B: ratatui::backend::Backend>(f: &mut ratatui::F
     // --- Activity panel ---
     let activity_text = if let Some(topic) = app.topics.get(app.selected_index) {
         let mut lines = vec![Line::from(Span::styled(
-            format!("Topic: {}", topic.name),
+            format!("[{}]", topic.name),
             Style::default().add_modifier(Modifier::BOLD),
         ))];
+
         lines.push(Line::from(""));
 
         if topic.messages.is_empty() {
             lines.push(Line::from("No messages yet..."));
         } else {
             for msg in &topic.messages {
-                lines.push(Line::from(msg.clone()));
+                let timestamp_span = Span::styled(
+                    format!("<{}>: ", msg.timestamp),
+                    Style::default()
+                        .fg(Color::LightRed)
+                        .add_modifier(Modifier::BOLD),
+                );
+
+                let payload_span = Span::raw(&msg.payload);
+                lines.push(Line::from(vec![timestamp_span, payload_span]));
             }
         }
         lines
