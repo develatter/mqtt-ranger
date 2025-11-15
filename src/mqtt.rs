@@ -9,7 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::app;
 
-///! Represents an MQTT event containing a topic and its associated payload.
+const MQTT_TIMESTAMP_FORMAT: &str = "[year]-[month]-[day] [hour]:[minute]:[second]";
+
+/// Represents an MQTT event containing a topic and its associated payload.
 #[derive(Debug)]
 pub struct MQTTEvent {
     pub(crate) topic: String,
@@ -17,7 +19,7 @@ pub struct MQTTEvent {
     pub(crate) timestamp: time::OffsetDateTime,
 }
 
-///! Wrapper struct that represents an MQTT client with its associated event loop.
+/// Wrapper struct that represents an MQTT client with its associated event loop.
 pub struct MQTTClient{
     pub(crate) client: AsyncClient,
     pub(crate) event_loop: EventLoop,
@@ -29,7 +31,7 @@ pub struct MQTTConfig {
     pub port: u16,
 }
 
-///! Connects to an MQTT broker and returns an MQTTClient instance.
+/// Connects to an MQTT broker and returns an MQTTClient instance.
 pub fn create_mqtt_client(host: &str, port: u16) -> MQTTClient {
     let mut mqttoptions = MqttOptions::new("mqtt-ranger", host, port);
     mqttoptions.set_keep_alive(std::time::Duration::from_secs(5));
@@ -41,7 +43,7 @@ pub fn create_mqtt_client(host: &str, port: u16) -> MQTTClient {
     }
 }
 
-///! Runs the MQTT client, subscribes to all topics, and processes incoming messages.
+/// Runs the MQTT client, subscribes to all topics, and processes incoming messages.
 pub async fn run(app: Arc<Mutex<app::AppState>>, config: MQTTConfig) -> Result<(), Box<dyn std::error::Error>> {
     let mqtt_client = configure_mqtt_client(
         &config.host, 
@@ -59,7 +61,7 @@ pub async fn run(app: Arc<Mutex<app::AppState>>, config: MQTTConfig) -> Result<(
     Ok(())
 }
 
-///! Configures the MQTT client by subscribing to all topics.
+/// Configures the MQTT client by subscribing to all topics.
 async fn configure_mqtt_client(host: &str, port: u16) -> Result<MQTTClient, Box<dyn std::error::Error>> {
     let mqtt_client = create_mqtt_client(host, port);
 
@@ -69,7 +71,7 @@ async fn configure_mqtt_client(host: &str, port: u16) -> Result<MQTTClient, Box<
     Ok(mqtt_client)
 }
 
-///! Handles incoming MQTT messages and sends them through a channel.
+/// Handles incoming MQTT messages and sends them through a channel.
 fn handle_incoming_messages(mut mqtt_client: MQTTClient, tx: mpsc::Sender<MQTTEvent>) {
     tokio::spawn(async move {
         while let Ok(notification) = mqtt_client.event_loop.poll().await {
@@ -95,7 +97,7 @@ fn handle_incoming_messages(mut mqtt_client: MQTTClient, tx: mpsc::Sender<MQTTEv
     });
 }
 
-///! Updates the application state with incoming MQTT messages received through a channel.
+/// Updates the application state with incoming MQTT messages received through a channel.
 fn update_app_state(app: Arc<Mutex<app::AppState>>, mut rx: mpsc::Receiver<MQTTEvent>) {
     tokio::spawn(async move {
         while let Some(mqtt_event) = rx.recv().await {
@@ -104,7 +106,7 @@ fn update_app_state(app: Arc<Mutex<app::AppState>>, mut rx: mpsc::Receiver<MQTTE
             
             let mut app_lock = app.lock().unwrap();
             let topic = app_lock.topics.iter_mut().find(|t| t.name == topic_name);
-            let date_format: Vec<time::format_description::BorrowedFormatItem<'_>> = parse("[year]-[month]-[day] [hour]:[minute]:[second]").unwrap();
+            let date_format: Vec<time::format_description::BorrowedFormatItem<'_>> = parse(MQTT_TIMESTAMP_FORMAT).unwrap();
             let timestamp = mqtt_event.timestamp.format(&date_format).unwrap();
 
             if let Some(t) = topic {

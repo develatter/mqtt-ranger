@@ -3,21 +3,21 @@
 ///! the state of the MQTT topics and their associated messages.
 
 
-///! Association of an MQTT topic with its messages.
-///! Each topic has a name and a list of messages received on that topic.
+/// Association of an MQTT topic with its messages.
+/// Each topic has a name and a list of messages received on that topic.
 pub struct TopicActivity {
     pub name: String,
     pub messages: Vec<MessageActivity>,
 }
 
-///! Represents a single MQTT message activity,
+/// Represents a single MQTT message activity,
 pub struct MessageActivity {
     pub payload: String,
     pub timestamp: String,
 }
 
-///! Represents the overall state of the application,
-///! including the list of topics and the currently selected topic.
+/// Represents the overall state of the application,
+/// including the list of topics and the currently selected topic.
 pub struct AppState {
     pub topics: Vec<TopicActivity>,
     pub selected_index: usize,
@@ -31,14 +31,14 @@ impl AppState {
         }
     }
 
-    ///! Move the selection to the next topic in the list.
+    /// Move the selection to the next topic in the list.
     pub fn next(&mut self) {
         if !self.topics.is_empty() {
             self.selected_index = (self.selected_index + 1) % self.topics.len();
         }
     }
 
-    ///! Move the selection to the previous topic in the list.
+    /// Move the selection to the previous topic in the list.
     pub fn previous(&mut self) {
         if !self.topics.is_empty() {
             if self.selected_index == 0 {
@@ -51,14 +51,14 @@ impl AppState {
 }
 
 
-///! Represents the fields in the configuration form.
+/// Represents the fields in the configuration form.
 #[derive(Copy, Clone)]
 pub enum FocusField {
     Host,
     Port,
 }
 
-///! Represents the state of the configuration form.
+/// Represents the state of the configuration form.
 pub struct ConfigFormState {
     pub host: String,
     pub port: String,
@@ -76,7 +76,7 @@ impl ConfigFormState {
         }
     }
 
-    ///! Move focus to the next field in the form.
+    /// Move focus to the next field in the form.
     pub fn next_field(&mut self) {
         self.focus = match self.focus {
             FocusField::Host => FocusField::Port,
@@ -84,7 +84,7 @@ impl ConfigFormState {
         };
     }
 
-    ///! Move focus to the previous field in the form.
+    /// Move focus to the previous field in the form.
     pub fn prev_field(&mut self) {
         self.focus = match self.focus {
             FocusField::Host => FocusField::Port,
@@ -92,7 +92,7 @@ impl ConfigFormState {
         };
     }
 
-    ///! Insert a character into the currently focused field.
+    /// Insert a character into the currently focused field.
     pub fn insert_char(&mut self, c: char) {
         match self.focus {
             FocusField::Host => self.host.push(c),
@@ -100,7 +100,7 @@ impl ConfigFormState {
         }
     }
 
-    ///! Delete the last character from the currently focused field.
+    /// Delete the last character from the currently focused field.
     pub fn delete_char(&mut self) {
         match self.focus {
             FocusField::Host => {
