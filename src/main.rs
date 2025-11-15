@@ -8,27 +8,27 @@ pub mod app;
 pub mod mqtt;
 pub mod tui;
 
-use app::{AppState as App};
-use tui::run_topic_activity_screen;
+use app::{AppState};
+use crate::tui::config_form::ConfigFormScreen;
+use crate::tui::splash::SplashScreen;
+use crate::tui::Screen;
+use crate::tui::topic_activity::TopicActivityScreen;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let app = Arc::new(Mutex::new(App::new()));
+    let app_state = Arc::new(Mutex::new(AppState::new()));
 
     let mut terminal = tui::init_terminal()?;
 
-    let _ = tui::run_splash_screen(&mut terminal);
+    let mut splash_screen = SplashScreen::new(&mut terminal);
+    splash_screen.run()?;
+    
+    let mut config_screen = ConfigFormScreen::new(&mut terminal);
+    config_screen.run()?; 
 
-    let config = match tui::run_config_form_screen(&mut terminal) {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            let _ = tui::restore_terminal(&mut terminal);
-            eprintln!("Configuration error: {}", e);
-            return Ok(());
-        }
-    };
+    let config = config_screen.into_config().expect("No config produced");
 
-    if let Err(e) = mqtt::run(app.clone(), config).await {
+    if let Err(e) = mqtt::run(app_state.clone(), config).await {
         let _ = tui::restore_terminal(&mut terminal);
 
         eprintln!("MQTT Error: {}", e);
@@ -36,7 +36,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let res = run_topic_activity_screen(&mut terminal, app);
+    let mut topic_activity_screen = TopicActivityScreen::new(&mut terminal, app_state);
+    let res = topic_activity_screen.run();
 
     let _ = tui::restore_terminal(&mut terminal);
 
