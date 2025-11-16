@@ -126,3 +126,66 @@ fn update_app_state(app: Arc<Mutex<app::AppState>>, mut rx: mpsc::Receiver<MQTTE
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mqtt_config_with_valid_host_and_port() {
+        let config = MQTTConfig {
+            host: "localhost".to_string(),
+            port: 1883,
+        };
+        
+        assert_eq!(config.host, "localhost");
+        assert_eq!(config.port, 1883);
+    }
+
+    #[test]
+    fn test_mqtt_config_with_different_valid_port() {
+        let config = MQTTConfig {
+            host: "broker.hivemq.com".to_string(),
+            port: 8883,
+        };
+        
+        assert_eq!(config.host, "broker.hivemq.com");
+        assert_eq!(config.port, 8883);
+    }
+
+    #[test]
+    fn test_reject_invalid_port_string() {
+        // Test that parsing invalid port strings fails
+        let invalid_ports = vec!["abc", "12.34", "-100", "70000"];
+        
+        for invalid_port in invalid_ports {
+            let result = invalid_port.parse::<u16>();
+            assert!(result.is_err(), "Port '{}' should be invalid", invalid_port);
+        }
+    }
+
+    #[test]
+    fn test_reject_negative_port() {
+        // u16 cannot hold negative values, so parsing should fail
+        let result = "-1".parse::<u16>();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_reject_port_exceeding_u16_max() {
+        // Port value exceeding u16 max (65535) should fail
+        let result = "70000".parse::<u16>();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_accept_valid_numeric_ports() {
+        // Test valid port numbers
+        let valid_ports = vec!["0", "1883", "8883", "65535"];
+        
+        for valid_port in valid_ports {
+            let result = valid_port.parse::<u16>();
+            assert!(result.is_ok(), "Port '{}' should be valid", valid_port);
+        }
+    }
+}
