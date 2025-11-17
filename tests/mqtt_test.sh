@@ -45,7 +45,7 @@ sleep 1.5
 mosquitto_pub -h "$MOSQUITTO_HOST" -p $MOSQUITTO_PORT -t "devices/device2/battery" -m "45%" &
 sleep 0.4
 mosquitto_pub -h "$MOSQUITTO_HOST" -p $MOSQUITTO_PORT -t "alerts/temperature" -m "device2:normal:55.0C" &
-sleep 1 
+sleep 1
 mosquitto_pub -h "$MOSQUITTO_HOST" -p $MOSQUITTO_PORT -t "devices/device1/battery" -m "15%" &
 sleep 0.4
 mosquitto_pub -h "$MOSQUITTO_HOST" -p $MOSQUITTO_PORT -t "alerts/battery" -m "device1:low:15%" &
