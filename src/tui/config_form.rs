@@ -73,6 +73,7 @@ impl<'a> ConfigFormScreen<'a> {
                     } else {
                         self.state.error = Some("Port must be a valid number".into());
                     }
+                    self.pending_conn = None;
                 }
                 Ok(Err(_)) => {
                     self.state.error = Some(format!("Host unreachable: {}", self.state.host));
