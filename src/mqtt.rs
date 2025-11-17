@@ -99,7 +99,7 @@ async fn configure_mqtt_client(
     Ok(mqtt_client)
 }
 
-// Spawn a task to handle incoming MQTT messages.
+/// Spawn a task to handle incoming MQTT messages.
 fn spawn_message_handler(mqtt_client: MQTTClient, tx: mpsc::Sender<MQTTEvent>) {
     tokio::spawn(async move { handle_incoming_messages(mqtt_client, tx).await });
 }
