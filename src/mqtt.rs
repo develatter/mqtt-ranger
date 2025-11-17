@@ -36,6 +36,7 @@ pub fn create_mqtt_client(host: &str, port: u16) -> MQTTClient {
     mqttoptions.set_keep_alive(std::time::Duration::from_secs(5));
 
     let (client, event_loop) = AsyncClient::new(mqttoptions, 10);
+    
     MQTTClient { client, event_loop }
 }
 
