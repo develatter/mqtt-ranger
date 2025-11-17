@@ -150,7 +150,6 @@ fn push_message_into_topic(menu_state: &Arc<Mutex<TopicActivityMenuState>>, mqtt
     let topic_name = mqtt_event.topic;
     let payload = mqtt_event.payload;
 
-
     let mut menu_lock = menu_state.lock().unwrap();
 
     let topic = menu_lock.topics.iter_mut().find(|t| t.name == topic_name);
