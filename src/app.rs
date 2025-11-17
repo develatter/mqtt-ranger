@@ -148,7 +148,6 @@ mod tests {
         assert_eq!(menu_state.selected_index, 0);
     }
 
-
     #[test]
     fn test_app_state_previous() {
         let mut menu_state = TopicActivityMenuState::new();
