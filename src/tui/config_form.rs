@@ -38,7 +38,7 @@ impl<'a> ConfigFormScreen<'a> {
         }
     }
 
-    fn update_spinner(&mut self, duration : u64) {
+    fn update_spinner(&mut self, duration: u64) {
         let now = Instant::now();
         if now.duration_since(self.last_spinner_tick) >= StdDuration::from_millis(duration) {
             self.state.spinner_idx = (self.state.spinner_idx + 1) % 4;
