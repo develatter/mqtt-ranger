@@ -59,8 +59,8 @@ pub async fn run(
 }
 
 
-/// It attempts to resolve `host:port` and connect using `std::net::TcpStream::connect_timeout` 
-/// within `timeout_secs` seconds.
+/// Validates broker availability by attempting to resolve `host:port` and connect using
+/// `std::net::TcpStream::connect_timeout` within `timeout_secs` seconds.
 pub fn validate_broker(
     host: &str,
     port: u16,
