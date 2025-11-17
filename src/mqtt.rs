@@ -5,6 +5,8 @@ use rumqttc::{AsyncClient, Event, EventLoop, MqttOptions, QoS};
 use std::sync::{Arc, Mutex};
 use time::{OffsetDateTime, UtcOffset, format_description::parse};
 use tokio::sync::mpsc;
+use std::net::{TcpStream as StdTcpStream, ToSocketAddrs};
+use std::time::Duration as StdDuration;
 
 use crate::app::{self, TopicActivityMenuState};
 
@@ -56,6 +58,34 @@ pub async fn run(
     Ok(())
 }
 
+
+/// It attempts to resolve `host:port` and connect using `std::net::TcpStream::connect_timeout` 
+/// within `timeout_secs` seconds.
+pub fn validate_broker(
+    host: &str,
+    port: u16,
+    timeout_secs: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let addr_str = format!("{}:{}", host, port);
+
+    let addrs_iter = addr_str.to_socket_addrs()?;
+
+    let timeout = StdDuration::from_secs(timeout_secs);
+
+    let mut last_err: Option<std::io::Error> = None;
+    for addr in addrs_iter {
+        match StdTcpStream::connect_timeout(&addr, timeout) {
+            Ok(_stream) => return Ok(()),
+            Err(e) => last_err = Some(e),
+        }
+    }
+
+    Err(Box::new(last_err.unwrap_or_else(|| std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("{}", addr_str),
+    ))))
+}
+
 /// Configures the MQTT client by subscribing to all topics.
 async fn configure_mqtt_client(
     host: &str,
@@ -71,7 +101,7 @@ async fn configure_mqtt_client(
 
 // Spawn a task to handle incoming MQTT messages.
 fn spawn_message_handler(mqtt_client: MQTTClient, tx: mpsc::Sender<MQTTEvent>) {
-    tokio::spawn(async move { handle_incoming_messages(mqtt_client, tx) });
+    tokio::spawn(async move { handle_incoming_messages(mqtt_client, tx).await });
 }
 
 /// Handles incoming MQTT messages and sends them through a channel.
@@ -119,6 +149,7 @@ async fn update_topic_menu_state(
 fn push_message_into_topic(menu_state: &Arc<Mutex<TopicActivityMenuState>>, mqtt_event: MQTTEvent) {
     let topic_name = mqtt_event.topic;
     let payload = mqtt_event.payload;
+
 
     let mut menu_lock = menu_state.lock().unwrap();
 

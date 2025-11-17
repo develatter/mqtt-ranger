@@ -64,6 +64,10 @@ pub struct ConfigFormState {
     pub port: String,
     pub focus: FocusField,
     pub error: Option<String>,
+    /// When true, the form is attempting to connect to the broker.
+    pub connecting: bool,
+    /// Spinner index for animated ellipsis (0..=3)
+    pub spinner_idx: usize,
 }
 
 impl ConfigFormState {
@@ -73,6 +77,8 @@ impl ConfigFormState {
             port: "".into(),
             focus: FocusField::Host,
             error: None,
+            connecting: false,
+            spinner_idx: 0,
         }
     }
 

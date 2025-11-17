@@ -35,6 +35,7 @@ impl<'a> SplashScreen<'a> {
            ▀▀                                                    
 "#;
 
+        let prompt_text = "< Press any key to continue >";
         let show_art = size.width >= 80 && size.height >= 20;
 
         let layout = Layout::default()
@@ -62,14 +63,14 @@ impl<'a> SplashScreen<'a> {
                 .block(Block::default());
             f.render_widget(art_paragraph, layout[1]);
             f.render_widget(
-                Paragraph::new("< Press any key to continue >")
+                Paragraph::new(prompt_text)
                     .style(Style::default().fg(Color::DarkGray))
                     .alignment(Alignment::Center),
                 layout[2],
             );
         } else {
             f.render_widget(
-                Paragraph::new("< Press any key to continue >")
+                Paragraph::new(prompt_text)
                     .style(Style::default().fg(Color::White))
                     .alignment(Alignment::Center),
                 layout[1],

@@ -24,9 +24,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     splash_screen.run()?;
     
     let mut config_screen = ConfigFormScreen::new(&mut terminal);
-    config_screen.run()?; 
+    if let Err(e) = config_screen.run() {
+        let _ = tui::restore_terminal(&mut terminal);
+        eprintln!("Config form cancelled: {}", e);
+        return Ok(());
+    }
 
-    let config = config_screen.into_config().expect("No config produced");
+    let config = match config_screen.into_config() {
+        Some(cfg) => cfg,
+        None => {
+            let _ = tui::restore_terminal(&mut terminal);
+            eprintln!("No config produced");
+            return Ok(());
+        }
+    };
 
     if let Err(e) = mqtt::run(topic_activity_menu_state.clone(), config).await {
         let _ = tui::restore_terminal(&mut terminal);
