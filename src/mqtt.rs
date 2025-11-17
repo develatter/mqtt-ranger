@@ -127,7 +127,7 @@ async fn handle_incoming_messages(mut mqtt_client: MQTTClient, tx: mpsc::Sender<
     }
 }
 
-// Spawn a task to update the application state with incoming MQTT messages.
+/// Spawn a task to update the application state with incoming MQTT messages.
 fn spawn_menu_updater(app: Arc<Mutex<app::TopicActivityMenuState>>, rx: mpsc::Receiver<MQTTEvent>) {
     tokio::spawn(async move {
         update_topic_menu_state(app, rx).await;
