@@ -144,7 +144,7 @@ async fn update_topic_menu_state(
     }
 }
 
-/// Receives a MQTTEvent, transforms it into a TopicActivity and push it into the topics
+/// Receives a MQTTEvent, transforms it into a TopicActivity and pushes it into the topics
 /// list of the MenuState.
 fn push_message_into_topic(menu_state: &Arc<Mutex<TopicActivityMenuState>>, mqtt_event: MQTTEvent) {
     let topic_name = mqtt_event.topic;
